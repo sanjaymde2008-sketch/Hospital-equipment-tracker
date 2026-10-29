@@ -125,6 +125,11 @@ header select{padding:7px 10px;border:1px solid var(--line);border-radius:8px;ba
 .toast.bad{background:var(--bad);color:#fff}
 #nb{background:var(--bad);color:#fff;border-radius:10px;font-size:11px;padding:0 6px;margin-left:4px}#nb:empty{display:none}
 #banner{background:var(--badbg);color:var(--bad);padding:8px 20px;font-size:14px}#banner[hidden]{display:none}
+td select,td input[type=text]{padding:6px 8px;border:1px solid var(--line);border-radius:8px;background:var(--bg);color:var(--ink);font:inherit;max-width:230px}
+.mine{background:var(--usebg);color:var(--use);border:1px solid var(--use);border-radius:10px;padding:12px 16px;margin:14px 20px 0;font-weight:600}
+.mine[hidden]{display:none}
+.mine span{display:inline-block;margin:2px 10px 2px 0}
+.how{font-size:13px;color:var(--mute);background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:10px 12px;margin:0 0 12px}
 #splash{position:fixed;inset:0;z-index:100;display:flex;align-items:center;justify-content:center;overflow:hidden;background:radial-gradient(120% 90% at 50% 0%,#0e4a45 0%,#082a28 45%,#04161a 100%);color:#fff;transition:opacity .7s,visibility .7s}
 #splash.hide{opacity:0;visibility:hidden}
 #splash .sp-grid{position:absolute;inset:0;background-image:linear-gradient(rgba(94,234,212,.07) 1px,transparent 1px),linear-gradient(90deg,rgba(94,234,212,.07) 1px,transparent 1px);background-size:44px 44px;-webkit-mask-image:radial-gradient(circle at 50% 50%,#000 20%,transparent 70%);mask-image:radial-gradient(circle at 50% 50%,#000 20%,transparent 70%)}
@@ -166,7 +171,9 @@ header select{padding:7px 10px;border:1px solid var(--line);border-radius:8px;ba
   <button role="tab" data-tab="zones" aria-selected="false">Zones</button>
   <button role="tab" data-tab="hist" aria-selected="false">History</button>
   <button role="tab" data-tab="notif" aria-selected="false">Notifications<span id="nb"></span></button>
+  <button role="tab" data-tab="tags" aria-selected="false">RFID tags</button>
 </nav>
+<div class="mine" id="mine" hidden></div>
 <div id="banner" hidden>Supabase not connected. Run the SQL setup in Supabase and check your internet connection.</div>
 <main>
   <section id="dash">
@@ -174,7 +181,7 @@ header select{padding:7px 10px;border:1px solid var(--line);border-radius:8px;ba
       <h2>Equipment availability</h2>
       <p class="hint">Tap a row to highlight that equipment on the map.</p>
       <div class="wrap"><table class="types">
-        <thead><tr><th>Equipment</th><th>Total</th><th>Available</th><th>Taken</th><th>Location · marks</th></tr></thead>
+        <thead><tr><th>Equipment</th><th>Total</th><th>Available</th><th>Taken</th><th>Taken by</th><th>Location · marks</th></tr></thead>
         <tbody id="types"></tbody>
       </table></div>
     </div>
@@ -205,7 +212,7 @@ header select{padding:7px 10px;border:1px solid var(--line);border-radius:8px;ba
         <select id="fZone" aria-label="Filter by zone"></select>
       </div>
       <div class="wrap"><table>
-        <thead><tr><th>ID</th><th>Name</th><th>Status</th><th>RFID checkpoint</th><th>Taken by</th><th>Taken (date, time)</th><th>Returned (date, time)</th><th>Marked for 10 min</th><th>Actions</th></tr></thead>
+        <thead><tr><th>ID</th><th>Name</th><th>Status</th><th>RFID checkpoint</th><th>Last RFID scan</th><th>Taken by</th><th>Taken (date, time)</th><th>Returned (date, time)</th><th>Marked for 10 min</th><th>Actions</th></tr></thead>
         <tbody id="eqBody"></tbody>
       </table></div>
       <div class="empty" id="eqEmpty" hidden>No equipment matches. Clear the search or choose “All statuses”.</div>
@@ -234,13 +241,34 @@ header select{padding:7px 10px;border:1px solid var(--line);border-radius:8px;ba
   <section id="notif" hidden>
     <div class="panel"><h2>Return notifications</h2><p class="hint">Use “Notify me when available” on taken equipment to be alerted here when it is returned.</p><ul class="feed" id="noteList"></ul><div class="empty" id="noteEmpty">No notifications.</div><button class="ab g" id="noteClear">Clear all</button></div>
   </section>
+  <section id="tags" hidden>
+    <div class="panel">
+      <h2>How staff ID + equipment works</h2>
+      <p class="how">1) Staff taps their ID card on a reader. 2) Within <b id="winTxt">10 seconds</b>, equipment tapped on the same reader is registered in that staff's name (Taken). 3) Equipment tapped <b>without</b> an ID card shows only as in use, user unknown. 4) Tapping equipment that is in use returns it at that reader.</p>
+      <h2>Unregistered tags (just scanned)</h2>
+      <p class="hint">Tap a new card or sticker on any reader. Its UID appears here. Choose the staff or equipment and press Assign.</p>
+      <div class="wrap"><table>
+        <thead><tr><th>Tag UID</th><th>Reader</th><th>Last seen</th><th>Assign to</th><th></th></tr></thead>
+        <tbody id="utBody"></tbody>
+      </table></div>
+      <div class="empty" id="utEmpty">No unregistered tags. Tap a new tag on a reader and it will appear here.</div>
+    </div>
+    <div class="panel"><h2>Reader log (last 20 taps)</h2><p class="hint">Shows exactly what each tap did. If an equipment tap is not listed here, the reader is not reaching the database.</p>
+      <div class="wrap"><table><thead><tr><th>Time</th><th>Reader</th><th>Tag UID</th><th>Result</th></tr></thead><tbody id="slBody"></tbody></table></div>
+      <div class="empty" id="slEmpty" hidden>No taps yet.</div></div>
+    <div class="panel"><h2>Staff ID cards</h2><p class="hint">Type or paste a UID and press Save, or use the list above.</p>
+      <div class="wrap"><table><thead><tr><th>Staff</th><th>Department</th><th>Tag UID</th><th></th></tr></thead><tbody id="stTags"></tbody></table></div></div>
+    <div class="panel"><h2>Equipment tags</h2>
+      <div class="wrap"><table><thead><tr><th>Equipment</th><th>Zone</th><th>Tag UID</th><th></th></tr></thead><tbody id="eqTags"></tbody></table></div></div>
+  </section>
 </main>
-<footer>Location is the last RFID checkpoint scan. All data is shared live between staff. <button class="theme" id="reset" style="margin-left:8px">Reset demo data</button></footer>
+<footer>Location is the last RFID checkpoint scan. All data is shared live between staff<span id="sync"></span>. <button class="theme" id="reset" style="margin-left:8px">Reset to default (3 in Ward A, 2 in Ward B)</button></footer>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
 <script>
 // ---------- DATA ----------
 const MARK_MS = 6e5;
+let WINDOW_S = 30; // read from the database (app_settings), see supabase_fix_all.sql
 let skew = 0; const nowS = () => new Date().getTime() + skew;
 const FLOORS = [
  {name:"Ground floor",col:"#0f6b66",rooms:[["Emergency",20,210,"t","n"],["Radiology",240,150,"t","n"],["Laboratory",400,110,"t","n"],["Pharmacy",520,90,"t","n"],["Admin",620,80,"t","n"],["Main lobby",20,180,"b","n"],["General Ward A",210,250,"b","e"],["Lift",470,60,"b","c"],["OPD",540,160,"b","n"]]},
@@ -252,8 +280,17 @@ const ZONES = Object.keys(ROOM);
 const CPN = {"General Ward A":"RFID checkpoint 1","General Ward B":"RFID checkpoint 2"};
 let STAFF = [];
 const ZCOL = {}; ZONES.forEach(z=>ZCOL[z]=FLOORS[ROOM[z].f].col);
-const items = [["M01","🖥️","Portable monitor","General Ward A"],["BP01","🩺","BP machine","General Ward A"],["XR01","🩻","X-ray machine","General Ward B"],["PO01","💓","Pulse oximeter","General Ward B"],["GL01","🩸","Glucometer","General Ward A"],["FD01","🤰","Fetal doppler","General Ward B"]]
- .map(([id,emoji,nm,zone])=>({id,emoji,name:emoji+" "+nm,zone,home:zone,status:"available",staff:"—",staffId:"",issued:null,returned:null}));
+// ===== DEFAULT WARD OF EACH EQUIPMENT (change ward names here) =====
+const DEFAULT_WARD = {
+  XR01:"General Ward A",  // X-ray machine
+  M01:"General Ward A",   // Portable monitor
+  PO01:"General Ward A",  // Pulse oximeter
+  BP01:"General Ward B",  // BP machine
+  GL01:"General Ward B"   // Glucometer
+};
+const items = [["XR01","🩻","X-ray machine"],["M01","🖥️","Portable monitor"],["PO01","💓","Pulse oximeter"],["BP01","🩺","BP machine"],["GL01","🩸","Glucometer"]]
+ .map(([id,emoji,nm])=>{ const zone=DEFAULT_WARD[id]||"General Ward A"; return {id,emoji,name:emoji+" "+nm,zone,home:zone,status:"available",staff:"—",staffId:"",issued:null,returned:null}; });
+let activity=[], actWarned=false, scanlog=[];
 let history=[], marks=[], notify=[], notes=[], me=null, db=null;
 
 // ---------- HELPERS ----------
@@ -270,8 +307,8 @@ const ymd = t => { const d=new Date(t); return d.getFullYear()+"-"+String(d.getM
 function renderTypes(){
   const fo=document.activeElement&&document.activeElement.closest&&document.activeElement.closest("tr.row"), ft=fo&&fo.dataset.type;
   $("types").innerHTML = TYPES.map(t=>{
-    const l=items.filter(i=>i.type===t), tot=l.length, a=l.filter(i=>stat(i)==="available").length, n=tot-a, loc=ZONES.map(z=>"📍 "+z.replace("General ","")+": <b>"+l.filter(i=>i.zone===z).length+"</b>").join(" · "), mk=l.reduce((c,i)=>c+marksOf(i.id).length,0);
-    return `<tr class="row${hiType===t?" on":""}" tabindex="0" data-type="${t}" title="Highlight on map"><td><b>${t}</b></td><td class="num">${tot}</td><td class="num n-ok">${a}</td><td><span class="num n-bad">${n}</span></td><td style="font-size:13px;white-space:normal;min-width:140px">${loc}<br><span class="cd">⏳ ${mk} marked now</span></td></tr>`;
+    const l=items.filter(i=>i.type===t), tot=l.length, a=l.filter(i=>stat(i)==="available").length, n=tot-a, loc=ZONES.map(z=>"📍 "+z.replace("General ","")+": <b>"+l.filter(i=>i.zone===z).length+"</b>").join(" · "), mk=l.reduce((c,i)=>c+marksOf(i.id).length,0), mn=l.flatMap(i=>marksOf(i.id).map(m=>hx(m.name))).join(", "), who=l.filter(i=>i.status==="inuse").map(i=>`<div>👤 <b>${hx(i.staffId?i.staff:"Unknown user")}</b><br><small style="margin:0">${hx(i.zone.replace("General ",""))} · since ${tm(i.issued)}</small></div>`).join("")||"—";
+    return `<tr class="row${hiType===t?" on":""}" tabindex="0" data-type="${t}" title="Highlight on map"><td><b>${t}</b></td><td class="num">${tot}</td><td class="num n-ok">${a}</td><td><span class="num n-bad">${n}</span></td><td style="font-size:13px;white-space:normal;min-width:120px">${who}</td><td style="font-size:13px;white-space:normal;min-width:140px">${loc}<br><span class="cd">⏳ ${mk} marked now${mn?": "+mn:""}</span></td></tr>`;
   }).join("");
   if(ft){ const n=$("types").querySelector(`tr[data-type="${ft}"]`); if(n) n.focus({preventScroll:true}); }
 }
@@ -314,7 +351,13 @@ function zoneHTML(){
   }).join("");
 }
 const mm = ms => { const x=Math.max(0,Math.min(600,Math.ceil(ms/1000))); return Math.floor(x/60)+":"+String(x%60).padStart(2,"0"); };
-const live = () => marks.filter(m=>m.at+MARK_MS>nowS());
+const live = () => marks.filter(m=>{
+  if(m.at+MARK_MS<=nowS()) return false;                    // 10 minutes over
+  const it=items.find(i=>i.id===m.eq);
+  if(!it||it.status==="inuse") return false;               // item taken -> mark is gone
+  const h=history.find(x=>x.eq===m.eq);                    // latest take/return of this item
+  return !h||m.at>h.t;                                     // taken (and maybe returned) after marking -> mark is gone
+});
 const marksOf = id => live().filter(m=>m.eq===id).sort((a,b)=>a.at-b.at);
 const myMark = id => me && marksOf(id).find(m=>m.staff===me.id);
 const myNotify = id => me && notify.some(n=>n.eq===id&&n.staff===me.id);
@@ -325,23 +368,56 @@ function actionsHTML(i){
   if(!me) return "";
   const b=(a,t,g)=>`<button class="ab${g?" g":""}" data-act="${a}" data-id="${i.id}">${t}</button>`;
   if(i.status!=="inuse") return myMark(i.id)?b("unmark","Cancel my mark",1):b("take","Take")+b("mark","Mark for me (10 min)",1);
-  if(i.staffId===me.id) return ZONES.map(z=>`<button class="ab" data-act="ret" data-id="${i.id}" data-z="${z}">Return at ${z}</button>`).join("");
+  if(!i.staffId||i.staffId===me.id){ const r=ZONES.map(z=>`<button class="ab" data-act="ret" data-id="${i.id}" data-z="${z}">Return at ${z}</button>`).join(""); return i.staffId?r:r+(myNotify(i.id)?b("notify","Notify me: ON (turn off)",1):b("notify","Notify me when available",1)); }
   return myNotify(i.id)?b("notify","Notify me: ON (turn off)",1):b("notify","Notify me when available",1);
 }
+function scanText(r){
+  let j; try{ j=JSON.parse(r); }catch(e){ return hx(r); }
+  if(j.error) return "❌ "+hx(j.error)+(j.tag?" (assign it below)":"");
+  if(j.type==="staff") return "🪪 ID card: <b>"+hx(j.staff)+"</b> · "+hx(j.window_seconds)+" s window open";
+  if(j.ignored) return "⏸ <b>"+hx(j.equipment)+"</b> ignored ("+hx(j.ignored)+")";
+  if(j.type==="equipment") return (j.action==="Taken"?"📦 ":"↩️ ")+"<b>"+hx(j.equipment)+"</b> "+hx(j.action)+(j.staff?" by <b>"+hx(j.staff)+"</b>":" · user unknown (ID not tapped in time)");
+  return hx(r);
+}
+function renderScanLog(){
+  if(!$("slBody")) return;
+  if(scanlog===null){ $("slBody").innerHTML='<tr><td colspan="4">Run supabase_scan_log.sql in Supabase to see reader taps here.</td></tr>'; $("slEmpty").hidden=true; return; }
+  $("slBody").innerHTML=scanlog.map(x=>`<tr><td>${tm(x.t)}</td><td>${hx(x.cp||"—")}</td><td><b>${hx(x.tag)}</b></td><td>${scanText(x.result)}</td></tr>`).join("");
+  $("slEmpty").hidden=scanlog.length>0;
+}
+const EV={staff_tap:["🪪","ID tap"],taken:["📦","Taken"],returned:["↩️","Returned"],marked:["⏳","Marked"],mark_removed:["✖️","Mark removed"],notify_on:["🔔","Notify ON"],notify_off:["🔕","Notify OFF"],notified:["🔔","Notified"],unknown_tag:["⚠️","Unknown tag"],reset:["♻️","Reset"]};
+const hx=v=>String(v==null?"":v).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+function actText(a){
+  const s=hx(a.staff||"Unknown user"), n=hx(a.name||a.eq||"equipment");
+  switch(a.event){
+    case "staff_tap": return `<b>${s}</b> tapped ID card`;
+    case "taken": return `<b>${n}</b> taken by ${s}`;
+    case "returned": return `<b>${n}</b> returned by ${s}`;
+    case "marked": return `<b>${s}</b> marked <b>${n}</b> (10 min)`;
+    case "mark_removed": return `Mark on <b>${n}</b> removed${a.staff?" ("+s+")":""}`;
+    case "notify_on": return `<b>${s}</b> asked to be notified for <b>${n}</b>`;
+    case "notify_off": return `<b>${s}</b> turned off notify for <b>${n}</b>`;
+    case "notified": return `<b>${s}</b> notified: <b>${n}</b> is available`;
+    case "unknown_tag": return `Unregistered tag <b>${hx(a.detail)}</b> scanned`;
+    case "reset": return `All data was reset`;
+    default: return hx(a.event);
+  }
+}
 function renderFeed(){
-  $("feed").innerHTML = history.slice(0,7).map(h=>
-   `<li><b>${h.name}</b> ${h.action==="Taken"?"taken by":"returned by"} ${h.staff}<small>${h.zone} · ${fmt(h.t)}</small></li>`).join("") || `<li style="color:var(--mute)">No activity yet.</li>`;
+  $("feed").innerHTML = activity.slice(0,15).map(a=>
+   `<li>${(EV[a.event]||["•"])[0]} ${actText(a)}<small>${a.zone?hx(a.zone)+" · ":""}${fmt(a.t)}</small></li>`).join("") || `<li style="color:var(--mute)">No activity yet.</li>`;
 }
 function renderTable(){
   const q = $("q").value.trim().toLowerCase(), fs = $("fStatus").value, fz = $("fZone").value;
   const rows = items.filter(i=>(!q||i.id.toLowerCase().includes(q)||i.name.toLowerCase().includes(q))&&(!fs||stat(i)===fs)&&(!fz||i.zone===fz));
-  $("eqBody").innerHTML = rows.map(i=>`<tr><td><b>${i.id}</b></td><td>${i.name}</td><td>${badge(stat(i))}</td><td>${i.zone}</td><td>${i.staff}</td><td>${fmt(i.issued)}</td><td>${i.status==="inuse"?"—":fmt(i.returned)}</td><td>${marksHTML(i)||"—"}</td><td>${actionsHTML(i)}</td></tr>`).join("");
+  $("eqBody").innerHTML = rows.map(i=>`<tr><td><b>${i.id}</b></td><td>${i.name}</td><td>${badge(stat(i))}</td><td>${i.zone}</td><td>${i.lastScan?fmt(i.lastScan):"No scan yet"}</td><td>${whoOf(i)}</td><td>${fmt(i.issued)}</td><td>${i.status==="inuse"?"—":fmt(i.returned)}</td><td>${marksHTML(i)||"—"}</td><td>${actionsHTML(i)}</td></tr>`).join("");
   $("eqEmpty").hidden = rows.length>0;
 }
 function renderHistory(){
   const d = $("hDate").value, e = $("hEq").value;
-  const rows = history.filter(h=>(!d||ymd(h.t)===d)&&(!e||h.eq===e));
-  $("hBody").innerHTML = rows.slice(0,100).map(h=>`<tr><td>${dt(h.t)}</td><td>${tm(h.t)}</td><td>${h.name}</td><td>${h.staff}</td><td>${h.zone}</td><td>${badge(h.action==="Taken"?"inuse":"available").replace(/Taken|Available/,h.action)}</td></tr>`).join("");
+  const rows = activity.filter(a=>(!d||ymd(a.t)===d)&&(!e||a.eq===e));
+  const act = a => a.event==="taken"?badge("inuse").replace(/Taken|Available/,"Taken"):a.event==="returned"?badge("available").replace(/Taken|Available/,"Returned"):hx((EV[a.event]||["","" ])[0]+" "+((EV[a.event]||[0,a.event])[1]));
+  $("hBody").innerHTML = rows.slice(0,300).map(a=>`<tr><td>${dt(a.t)}</td><td>${tm(a.t)}</td><td>${hx(a.name||"—")}</td><td>${hx(a.staff||"—")}</td><td>${hx(a.zone||"—")}</td><td>${act(a)}</td></tr>`).join("");
   $("hEmpty").hidden = rows.length>0;
 }
 function renderNotes(){
@@ -353,8 +429,14 @@ function renderMarks(){
   const el=$("markList"); if(!el) return;
   el.innerHTML = live().sort((a,b)=>a.at-b.at).map(m=>{ const it=items.find(i=>i.id===m.eq); return it?`<li><b>${it.name}</b> marked by ${m.name}<small>Marked at ${tm(m.at)} · <span class="cd" data-exp="${m.at+MARK_MS}">${mm(m.at+MARK_MS-nowS())}</span> left</small></li>`:""; }).join("") || `<li style="color:var(--mute)">No active marks.</li>`;
 }
+function renderMine(){
+  const el=$("mine"); if(!el) return;
+  const mine=me?items.filter(i=>i.status==="inuse"&&i.staffId===me.id):[];
+  el.hidden=!mine.length;
+  el.innerHTML=mine.length?"✅ You have taken: "+mine.map(i=>`<span>${i.name} · ${i.zone} · since ${tm(i.issued)}</span>`).join(""):"";
+}
 function renderAll(){
-  [renderTypes,renderMap,renderFeed,renderMarks,renderTable,renderHistory,renderNotes,()=>{ $("zonesFull").innerHTML = zoneHTML(); }].forEach(f=>{ try{ f(); }catch(e){ console.error(e); } });
+  [renderMine,renderScanLog,renderTypes,renderMap,renderFeed,renderMarks,renderTable,renderHistory,renderNotes,renderTags,()=>{ $("zonesFull").innerHTML = zoneHTML(); }].forEach(f=>{ try{ f(); }catch(e){ console.error(e); } });
 }
 
 // ---------- SETUP ----------
@@ -364,7 +446,7 @@ $("hEq").innerHTML = `<option value="">All equipment</option>`+items.map(i=>`<op
 ["hDate","hEq"].forEach(id=>$(id).addEventListener("change",renderHistory));
 function show(tab){
   document.querySelectorAll("#tabs button").forEach(b=>b.setAttribute("aria-selected",b.dataset.tab===tab));
-  ["dash","equip","zones","hist","notif"].forEach(s=>$(s).hidden = s!==tab);
+  ["dash","equip","zones","hist","notif","tags"].forEach(s=>$(s).hidden = s!==tab);
 }
 $("tabs").addEventListener("click",e=>{ if(e.target.dataset.tab) show(e.target.dataset.tab); });
 $("q").addEventListener("input",()=>{ show("equip"); renderTable(); });
@@ -407,7 +489,7 @@ const pos = g => { const a=g.getBoundingClientRect(), b=mapin.getBoundingClientR
 function showTip(g){ const i=items.find(x=>x.id===g.dataset.id), p=pos(g); tip.textContent=`${i.name} · ${LABEL[stat(i)]} · ${i.zone}`; tip.style.left=p.cx+"px"; tip.style.top=(p.cy-p.r-6)+"px"; tip.classList.add("on"); }
 function fillCard(){
   const i=items.find(x=>x.id===selId), s=stat(i);
-  const rows=[["RFID checkpoint",i.zone],["Floor",FLOORS[ROOM[i.zone].f].name],["Taken by",i.staff],["Taken",fmt(i.issued)],["Returned",i.status==="inuse"?"—":fmt(i.returned)]];
+  const rows=[["RFID checkpoint",i.zone],["Last RFID scan",i.lastScan?fmt(i.lastScan):"No scan yet"],["Floor",FLOORS[ROOM[i.zone].f].name],["Taken by",whoOf(i)],["Taken",fmt(i.issued)],["Returned",i.status==="inuse"?"—":fmt(i.returned)]];
   card.innerHTML=`<button class="x" aria-label="Close details">×</button><h3>${i.name}</h3><div style="margin-top:4px">${badge(s)} <span style="color:var(--mute);font-size:13px">${i.id}</span></div>`+rows.map((r,n)=>`<div class="r" style="--i:${n}"><span>${r[0]}</span><b>${r[1]}</b></div>`).join("")+marksHTML(i)+`<div style="margin-top:10px">${actionsHTML(i)}</div>`;
 }
 function place(){
@@ -535,7 +617,9 @@ tick(); setInterval(tick,1000);
 // ---------- SUPABASE (uses your staff, equipment, transactions, checkpoint_events tables) ----------
 const SB_URL="https://fibaegnzbakwefachwgr.supabase.co", SB_KEY="sb_publishable_rseKDIsDKHS6dPOXo2S9QQ_7EcVs_ub";
 let sb=null, staffMap={}, busy=false, again=false, notesReady=false, rtT=null, errShown=0;
-const seenNotes=new Set(), gone=new Set();
+const seenNotes=new Set(), gone=new Set(), seenScans=new Set(); let scansReady=false;
+const seenUT=new Set(); let utReady=false;
+const seenTx=new Set(), seenSS=new Set(); let txReady=false, ssReady=false, unk=[], tagsSig="";
 const iso=t=>new Date(t).toISOString(), msOf=x=>x?Date.parse(x):null;
 const byCode=c=>items.find(i=>i.id===c), byDb=id=>items.find(i=>i.dbId===id);
 const sname=id=>(staffMap[id]||{}).name||"Staff";
@@ -543,26 +627,46 @@ const fail=r=>{ if(r&&r.error) throw new Error(r.error.message); return r; };
 function toast(m,k){ const t=document.createElement("div"); t.className="toast"+(k?" "+k:""); const sp=document.createElement("span"); sp.textContent=m; const x=document.createElement("button"); x.textContent="×"; x.setAttribute("aria-label","Dismiss"); x.onclick=()=>t.remove(); t.append(sp,x); $("toasts").append(t); setTimeout(()=>t.remove(),k==="note"?12000:5000); }
 function banner(m){ $("banner").textContent=m; $("banner").hidden=!m; const e=$("lerr"); if(e&&m){ e.textContent=m; e.style.color="var(--bad)"; } }
 
+const opt=p=>Promise.resolve(p).then(r=>r.error?{data:[]}:r);
 async function refresh(){
   if(!sb) return;
   if(busy){ again=true; return; }
   busy=true;
   try{
     const q=t=>sb.from(t).select("*");
-    const rs=await Promise.all([ q("equipment"), q("transactions").order("transaction_time",{ascending:false}).limit(400), q("checkpoint_events").order("detected_at",{ascending:false}).limit(800), q("marks"), q("notify_requests"), me?q("notifications").eq("staff_id",me.id):Promise.resolve({data:[]}) ]);
-    rs.forEach(fail);
-    const [eq,tx,ev,mk,nr,nt]=rs.map(r=>r.data||[]);
-    eq.forEach(r=>{ const it=byCode(r.equipment_code); if(!it) return; it.dbId=r.id; it.status=r.status==="inuse"?"inuse":"available"; it.zone=ROOM[r.last_checkpoint]?r.last_checkpoint:it.home; });
+    const rs=await Promise.all([ q("equipment"), q("transactions").order("transaction_time",{ascending:false}).limit(400), q("checkpoint_events").order("detected_at",{ascending:false}).limit(800), q("marks"), q("notify_requests"), me?q("notifications").eq("staff_id",me.id):Promise.resolve({data:[]}), q("staff"), opt(q("unknown_tags").order("last_seen",{ascending:false}).limit(20)), opt(q("staff_scans").order("scanned_at",{ascending:false}).limit(30)), q("activity_log").order("created_at",{ascending:false}).limit(500), q("scan_log").order("created_at",{ascending:false}).limit(20), q("app_settings") ]);
+    rs.slice(0,9).forEach(fail); const alErr=rs[9].error, slErr=rs[10].error;
+    const aset=(rs[11].data||[]).find(x=>x.key==="staff_window_seconds"); if(aset&&+aset.value>0&&+aset.value!==WINDOW_S){ WINDOW_S=+aset.value; if($("winTxt")) $("winTxt").textContent=WINDOW_S+" seconds"; }
+    const [eq,tx,ev,mk,nr,nt,st,ut,ss,al,sl]=rs.map(r=>r.data||[]);
+    eq.forEach(r=>{ const it=byCode(r.equipment_code); if(!it) return; it.dbId=r.id; it.tag=r.rfid_tag_id||""; it.status=r.status==="inuse"?"inuse":"available"; it.zone=ROOM[r.last_checkpoint]?r.last_checkpoint:it.home; });
     history=tx.map(t=>{ const it=byDb(t.equipment_id); if(!it) return null; const tm=msOf(t.transaction_time), e=ev.find(x=>x.equipment_id===t.equipment_id&&Math.abs(msOf(x.detected_at)-tm)<2000);
-      return {t:tm,eq:it.id,name:it.name,staff:sname(t.staff_id),staffId:t.staff_id,zone:e?e.checkpoint_name:it.zone,action:t.action}; }).filter(Boolean);
+      return {id:t.id,src:t.source,t:tm,eq:it.id,name:it.name,staff:t.staff_id?sname(t.staff_id):"Unknown",staffId:t.staff_id||"",zone:e?e.checkpoint_name:it.zone,action:t.action}; }).filter(Boolean);
     items.forEach(it=>{ const lt=history.find(h=>h.eq===it.id&&h.action==="Taken"), lr=history.find(h=>h.eq===it.id&&h.action==="Returned");
-      it.staff=lt?lt.staff:"—"; it.staffId=lt?lt.staffId:""; it.issued=lt?lt.t:null; it.returned=it.status==="inuse"?null:(lr?lr.t:null); });
+      it.staff=lt?lt.staff:"—"; it.staffId=lt&&lt.staffId?lt.staffId:""; it.issued=lt?lt.t:null; it.returned=it.status==="inuse"?null:(lr?lr.t:null); });
+    items.forEach(it=>{ const le=ev.find(x=>x.equipment_id===it.dbId); it.lastScan=le?msOf(le.detected_at):null; });
+    scanlog=slErr?null:sl.map(x=>({id:x.id,t:msOf(x.created_at),cp:x.checkpoint_name,tag:x.tag,result:x.result}));
+    if(alErr){ if(!actWarned){ actWarned=true; toast("Activity log table missing. Run supabase_activity_log.sql in Supabase.","bad"); }
+      activity=history.map(h=>({id:"t"+h.id,t:h.t,event:h.action==="Taken"?"taken":"returned",eq:h.eq,name:h.name,staff:h.staff,zone:h.zone,detail:""})); }
+    else activity=al.map(a=>({id:a.id,t:msOf(a.created_at),event:a.event,eq:a.equipment_code||"",name:a.equipment_name||"",staff:a.staff_name||"",zone:a.checkpoint_name||"",detail:a.detail||""}));
+    // scans that came from the RFID hardware (not from a Take/Return button) -> live toast
+    const hw=ev.filter(e=>!tx.some(t=>t.equipment_id===e.equipment_id&&Math.abs(msOf(t.transaction_time)-msOf(e.detected_at))<2000));
+    if(scansReady) hw.filter(e=>!seenScans.has(e.id)).forEach(e=>{ const it=byDb(e.equipment_id); if(it) toast("📡 RFID: "+it.name+" detected at "+e.checkpoint_name); });
+    hw.forEach(e=>seenScans.add(e.id)); scansReady=true;
+    st.forEach(r=>{ const p=staffMap[r.id]; if(p) p.tag=r.rfid_tag_id||""; });
+    const known=new Set([...STAFF.map(p=>p.tag),...items.map(i=>i.tag)].filter(Boolean).map(x=>x.toUpperCase()));
+    unk=ut.map(u=>({uid:u.tag_uid,cp:u.checkpoint_name||"—",t:msOf(u.last_seen)})).filter(u=>!known.has(String(u.uid).toUpperCase()));
+    // equipment taken/returned by the RFID reader -> live toast
+    history.filter(h=>h.src==="rfid"&&!seenTx.has(h.id)).forEach(h=>{ if(txReady&&me&&h.staffId&&String(h.staffId)===String(me.id)) toast(h.action==="Taken"?"✅ You took "+h.name+" at "+h.zone:"↩️ You returned "+h.name+" at "+h.zone+" · now free","note"); seenTx.add(h.id); }); txReady=true;
+    // staff ID card tapped -> 10 s window toast
+    ss.filter(x=>!seenSS.has(x.id)).forEach(x=>{ if(ssReady&&me&&String(x.staff_id)===String(me.id)) toast("🪪 Your ID tapped at "+x.checkpoint_name+" · scan equipment within "+WINDOW_S+" s"); seenSS.add(x.id); }); ssReady=true;
+    // unregistered tag scanned -> tell everyone once so it is not silently ignored
+    unk.forEach(u=>{ const k=u.uid+"|"+u.t; if(utReady&&!seenUT.has(k)) toast("⚠️ Unregistered tag "+u.uid+" at "+u.cp+" · assign it in the RFID tags tab","bad"); seenUT.add(k); }); utReady=true;
     marks=mk.map(m=>({id:m.id,eq:(byDb(m.equipment_id)||{}).id,staff:m.staff_id,name:sname(m.staff_id),at:msOf(m.marked_at)})).filter(m=>m.eq);
     notify=nr.map(n=>({id:n.id,eq:(byDb(n.equipment_id)||{}).id,staff:n.staff_id})).filter(n=>n.eq);
     notes=nt.map(n=>({id:n.id,to:n.staff_id,eq:(byDb(n.equipment_id)||{}).id,name:(byDb(n.equipment_id)||{}).name||"Equipment",t:msOf(n.returned_at),zone:n.checkpoint_name}));
     if(notesReady) notes.filter(n=>!seenNotes.has(n.id)).forEach(n=>toast(`🔔 ${n.name} is available again. Returned on ${fmt(n.t)} at ${n.zone}`,"note"));
     notes.forEach(n=>seenNotes.add(n.id)); if(me) notesReady=true;
-    banner(""); renderAll();
+    banner(""); $("sync").textContent=" · live, last update "+tm(nowS()); renderAll();
   }catch(e){ if(Date.now()-errShown>8000){ errShown=Date.now(); banner("Database error: "+e.message); } }
   busy=false; if(again){ again=false; refresh(); }
 }
@@ -577,12 +681,12 @@ const ACT = {
       sb.from("checkpoint_events").insert({equipment_id:it.dbId,checkpoint_name:it.zone,detected_at:t}),
       sb.from("marks").delete().eq("equipment_id",it.dbId),
       sb.from("notify_requests").delete().eq("equipment_id",it.dbId).eq("staff_id",me.id)]);
-    x.forEach(fail); refresh();
+    x.forEach(fail); it.status="inuse"; it.staffId=me.id; it.staff=me.name; it.issued=nowS(); it.returned=null; renderAll(); refresh();
     return "✅ You took "+it.name+" at "+it.zone;
   },
   async ret(code,z){
     const it=byCode(code);
-    if(it.staffId!==me.id){ toast("Only the staff who took it can return it","bad"); return; }
+    if(it.staffId&&it.staffId!==me.id){ toast("Only the staff who took it can return it","bad"); return; }
     const t=iso(nowS());
     const r=fail(await sb.from("equipment").update({status:"available",last_checkpoint:z,last_detected_at:t}).eq("id",it.dbId).eq("status","inuse").select());
     if(!r.data.length){ toast(it.name+" is already returned","bad"); refresh(); return; }
@@ -591,7 +695,7 @@ const ACT = {
       sb.from("transactions").insert({equipment_id:it.dbId,staff_id:me.id,action:"Returned",transaction_time:t}),
       sb.from("checkpoint_events").insert({equipment_id:it.dbId,checkpoint_name:z,detected_at:t}),
       ...(nr.length?[sb.from("notifications").insert(nr.map(n=>({staff_id:n.staff_id,equipment_id:it.dbId,checkpoint_name:z,returned_at:t}))), sb.from("notify_requests").delete().in("id",nr.map(n=>n.id))]:[])]);
-    x.forEach(fail); refresh();
+    x.forEach(fail); it.status="available"; it.zone=z; it.returned=nowS(); renderAll(); refresh();
     return "↩️ You returned "+it.name+" at "+z+(nr.length?" · "+nr.length+" staff notified":"");
   },
   async mark(code){
@@ -621,16 +725,56 @@ $("reset").onclick=async()=>{
   if(!sb||!confirm("Reset all equipment, marks, notifications and history?")) return;
   try{
     for(const t of ["marks","notify_requests","notifications","transactions","checkpoint_events"]) fail(await sb.from(t).delete().gte("id",0));
+    for(const t of ["staff_scans","scan_log"]) await sb.from(t).delete().gte("id",0);
+    await sb.from("activity_log").delete().gte("created_at","1970-01-01");
     for(const i of items) fail(await sb.from("equipment").update({status:"available",last_checkpoint:i.home,last_detected_at:null}).eq("id",i.dbId));
-    refresh(); toast("Demo data reset");
+    try{ await sb.from("activity_log").insert({event:"reset",staff_id:me?me.id:null,staff_name:me?me.name:null,detail:"All data reset"}); }catch(x){}
+    refresh(); toast("Reset done: 3 equipment in Ward A, 2 in Ward B");
   }catch(e){ toast("Reset failed: "+e.message,"bad"); }
 };
+// ---------- RFID TAGS TAB ----------
+const esc=v=>String(v==null?"":v).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+function whoOf(i){ return i.status==="inuse"&&!i.staffId?"Unknown (ID not tapped)":i.staff; }
+function renderTags(){
+  const sig=JSON.stringify([unk,STAFF.map(p=>p.tag),items.map(i=>i.tag)]);
+  if(sig===tagsSig) return;
+  const a=document.activeElement; if(a&&$("tags").contains(a)&&/^(SELECT|INPUT)$/.test(a.tagName)) return;
+  tagsSig=sig;
+  const opts='<option value="">Choose…</option><optgroup label="Staff ID card">'+STAFF.map(p=>`<option value="staff|${esc(p.id)}">${esc(p.name)}</option>`).join("")+'</optgroup><optgroup label="Equipment">'+items.map(i=>`<option value="equipment|${esc(i.id)}">${esc(i.id)} · ${esc(i.name)}</option>`).join("")+'</optgroup>';
+  $("utBody").innerHTML=unk.map(u=>`<tr><td><b>${esc(u.uid)}</b></td><td>${esc(u.cp)}</td><td>${fmt(u.t)}</td><td><select aria-label="Assign tag ${esc(u.uid)} to">${opts}</select></td><td><button class="ab" data-assign="${esc(u.uid)}">Assign</button></td></tr>`).join("");
+  $("utEmpty").hidden=unk.length>0;
+  const row=(k,ref,name,sub,tag)=>`<tr><td><b>${esc(name)}</b></td><td>${esc(sub)}</td><td><input type="text" value="${esc(tag)}" placeholder="Tag UID" aria-label="Tag UID for ${esc(name)}"></td><td><button class="ab" data-save="${k}|${esc(ref)}">Save</button><button class="ab g" data-clear="${k}|${esc(ref)}"${tag?"":" disabled"}>Clear</button></td></tr>`;
+  $("stTags").innerHTML=STAFF.map(p=>row("staff",p.id,p.name,p.dept||"Staff",p.tag||"")).join("");
+  $("eqTags").innerHTML=items.map(i=>row("equipment",i.id,i.id+" · "+i.name,i.zone,i.tag||"")).join("");
+}
+$("tags").addEventListener("click",async e=>{
+  const b=e.target.closest("button[data-assign],button[data-save],button[data-clear]"); if(!b) return;
+  if(!sb){ toast("Database not connected","bad"); return; }
+  b.disabled=true;
+  try{
+    if(b.dataset.assign){
+      const v=b.closest("tr").querySelector("select").value;
+      if(!v){ toast("Choose a staff member or equipment first","bad"); b.disabled=false; return; }
+      const [k,ref]=v.split("|"); fail(await sb.rpc("assign_tag",{p_tag:b.dataset.assign,p_kind:k,p_ref:ref}));
+      toast("✅ Tag "+b.dataset.assign+" assigned");
+    } else if(b.dataset.save){
+      const [k,ref]=b.dataset.save.split("|"), v=b.closest("tr").querySelector("input").value.trim();
+      if(!v){ toast("Type the tag UID first","bad"); b.disabled=false; return; }
+      fail(await sb.rpc("assign_tag",{p_tag:v,p_kind:k,p_ref:ref})); toast("✅ Tag saved");
+    } else {
+      const [k,ref]=b.dataset.clear.split("|");
+      fail(await sb.from(k==="staff"?"staff":"equipment").update({rfid_tag_id:null}).eq(k==="staff"?"id":"equipment_code",ref)); toast("Tag removed");
+    }
+    tagsSig=""; refresh();
+  }catch(err){ toast("Failed: "+(err.message||err),"bad"); }
+  b.disabled=false;
+});
 // countdowns + automatic expiry (server-synced clock)
 let lastN=-1;
 setInterval(()=>{
   document.querySelectorAll("[data-exp]").forEach(el=>el.textContent=mm(+el.dataset.exp-nowS()));
   const n=live().length; if(n!==lastN){ lastN=n; renderAll(); }
-  if(sb) marks.filter(m=>m.at+MARK_MS<=nowS()&&!gone.has(m.id)).forEach(m=>{ gone.add(m.id); sb.from("marks").delete().eq("id",m.id).then(r=>{ if(r.error) gone.delete(m.id); }); });
+  if(sb&&me){ const L=new Set(live()); marks.filter(m=>!L.has(m)&&!gone.has(m.id)).forEach(m=>{ gone.add(m.id); sb.from("marks").delete().eq("id",m.id).then(r=>{ if(r.error) gone.delete(m.id); }); }); }
 },1000);
 // login (no password)
 let pick=null;
@@ -640,7 +784,7 @@ function enter(p){ me=p; $("login").hidden=true; $("who").textContent=me.name; n
 $("go").onclick=()=>{ const p=STAFF.find(x=>String(x.id)===pick); if(!p) return; try{sessionStorage.setItem("het-staff",String(p.id));}catch(e){} enter(p); };
 $("logout").onclick=()=>{ try{sessionStorage.removeItem("het-staff");}catch(e){} location.reload(); };
 let saved2=null; try{saved2=sessionStorage.getItem("het-staff");}catch(e){}
-renderAll();
+renderAll(); $("winTxt").textContent=WINDOW_S+" seconds";
 (async()=>{
   if(!window.supabase){ banner("Could not load the Supabase library. Check your internet connection."); return; }
   sb=supabase.createClient(SB_URL,SB_KEY);
