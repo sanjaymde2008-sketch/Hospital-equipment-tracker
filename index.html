@@ -367,7 +367,7 @@ function marksHTML(i){
 function actionsHTML(i){
   if(!me) return "";
   const b=(a,t,g)=>`<button class="ab${g?" g":""}" data-act="${a}" data-id="${i.id}">${t}</button>`;
-  if(i.status!=="inuse") return myMark(i.id)?b("unmark","Cancel my mark",1):b("take","Take")+b("mark","Mark for me (10 min)",1);
+  if(i.status!=="inuse") return myMark(i.id)?b("unmark","Cancel my mark",1):b("mark","Mark for me (10 min)",1);
   if(!i.staffId||i.staffId===me.id){ const r=ZONES.map(z=>`<button class="ab" data-act="ret" data-id="${i.id}" data-z="${z}">Return at ${z}</button>`).join(""); return i.staffId?r:r+(myNotify(i.id)?b("notify","Notify me: ON (turn off)",1):b("notify","Notify me when available",1)); }
   return myNotify(i.id)?b("notify","Notify me: ON (turn off)",1):b("notify","Notify me when available",1);
 }
