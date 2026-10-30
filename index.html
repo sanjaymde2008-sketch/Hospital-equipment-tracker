@@ -150,6 +150,9 @@ td select,td input[type=text]{padding:6px 8px;border:1px solid var(--line);borde
 @keyframes spUp{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:none}}
 @keyframes spGlow{0%,100%{transform:scale(.9);opacity:.7}50%{transform:scale(1.08);opacity:1}}
 @keyframes spLoad{from{transform:scaleX(0)}to{transform:scaleX(1)}}
+.loc{background:none;border:0;padding:0;margin:0;color:var(--brand);font:inherit;font-weight:600;text-decoration:underline;text-underline-offset:3px;cursor:pointer;text-align:left}
+.mk.find .d{stroke:#f5b301;stroke-width:4;transform-box:fill-box;transform-origin:center;animation:fnd .8s ease-in-out 5}
+@keyframes fnd{50%{transform:scale(1.5)}}
 @media(prefers-reduced-motion:reduce){#splash *{animation:none!important}#splash .sp-ecg{stroke-dashoffset:0}}
 @media(prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
 </style>
@@ -290,7 +293,8 @@ const DEFAULT_WARD = {
 };
 const items = [["XR01","🩻","X-ray machine"],["M01","🖥️","Portable monitor"],["PO01","💓","Pulse oximeter"],["BP01","🩺","BP machine"],["GL01","🩸","Glucometer"]]
  .map(([id,emoji,nm])=>{ const zone=DEFAULT_WARD[id]||"General Ward A"; return {id,emoji,name:emoji+" "+nm,zone,home:zone,status:"available",staff:"—",staffId:"",issued:null,returned:null}; });
-let activity=[], actWarned=false, scanlog=[];
+let activity=[], actWarned=false, scanlog=[]; const findIds=new Set();
+function locBtn(i){ return `<button class="loc" data-loc="${i.id}" title="Show on map">📍 ${i.zone}</button>`; }
 let history=[], marks=[], notify=[], notes=[], me=null, db=null;
 
 // ---------- HELPERS ----------
@@ -307,7 +311,7 @@ const ymd = t => { const d=new Date(t); return d.getFullYear()+"-"+String(d.getM
 function renderTypes(){
   const fo=document.activeElement&&document.activeElement.closest&&document.activeElement.closest("tr.row"), ft=fo&&fo.dataset.type;
   $("types").innerHTML = TYPES.map(t=>{
-    const l=items.filter(i=>i.type===t), tot=l.length, a=l.filter(i=>stat(i)==="available").length, n=tot-a, loc=ZONES.map(z=>"📍 "+z.replace("General ","")+": <b>"+l.filter(i=>i.zone===z).length+"</b>").join(" · "), mk=l.reduce((c,i)=>c+marksOf(i.id).length,0), mn=l.flatMap(i=>marksOf(i.id).map(m=>hx(m.name))).join(", "), who=l.filter(i=>i.status==="inuse").map(i=>`<div>👤 <b>${hx(i.staffId?i.staff:"Unknown user")}</b><br><small style="margin:0">${hx(i.zone.replace("General ",""))} · since ${tm(i.issued)}</small></div>`).join("")||"—";
+    const l=items.filter(i=>i.type===t), tot=l.length, a=l.filter(i=>stat(i)==="available").length, n=tot-a, loc=ZONES.map(z=>{ const c=l.filter(i=>i.zone===z).length, nm=z.replace("General ",""); return c?`<button class="loc" data-zone="${z}" data-type="${t}" title="Show on map">📍 ${nm}: <b>${c}</b></button>`:"📍 "+nm+": <b>0</b>"; }).join(" · "), mk=l.reduce((c,i)=>c+marksOf(i.id).length,0), mn=l.flatMap(i=>marksOf(i.id).map(m=>hx(m.name))).join(", "), who=l.filter(i=>i.status==="inuse").map(i=>`<div>👤 <b>${hx(i.staffId?i.staff:"Unknown user")}</b><br><small style="margin:0">${hx(i.zone.replace("General ",""))} · since ${tm(i.issued)}</small></div>`).join("")||"—";
     return `<tr class="row${hiType===t?" on":""}" tabindex="0" data-type="${t}" title="Highlight on map"><td><b>${t}</b></td><td class="num">${tot}</td><td class="num n-ok">${a}</td><td><span class="num n-bad">${n}</span></td><td style="font-size:13px;white-space:normal;min-width:120px">${who}</td><td style="font-size:13px;white-space:normal;min-width:140px">${loc}<br><span class="cd">⏳ ${mk} marked now${mn?": "+mn:""}</span></td></tr>`;
   }).join("");
   if(ft){ const n=$("types").querySelector(`tr[data-type="${ft}"]`); if(n) n.focus({preventScroll:true}); }
@@ -335,7 +339,7 @@ function renderMap(){
       else if(!on&&was&&g.dataset.fl!==undefined) setTimeout(()=>{ if(g.classList.contains("off")) g.style.transform=g._tr; },300);
       else g.style.transform=tr;
       g.dataset.fl=R.f;
-      g.setAttribute("class",`mk ${stat(i)}${marksOf(i.id).length?" marked":""}${on?"":" off"}${hiType&&i.type!==hiType?" dim":""}${i.id===selId?" sel":""}`);
+      g.setAttribute("class",`mk ${stat(i)}${marksOf(i.id).length?" marked":""}${findIds.has(i.id)?" find":(findIds.size?" dim":"")}${on?"":" off"}${hiType&&i.type!==hiType?" dim":""}${i.id===selId?" sel":""}`);
       g.setAttribute("tabindex",on?"0":"-1"); g.setAttribute("aria-hidden",on?"false":"true");
       g.setAttribute("aria-label",`${i.name}, ${LABEL[stat(i)]}, ${z}, ${FLOORS[R.f].name}${marksOf(i.id).length?", marked by "+marksOf(i.id).map(m=>m.name).join(", "):""}`);
     });
@@ -410,7 +414,7 @@ function renderFeed(){
 function renderTable(){
   const q = $("q").value.trim().toLowerCase(), fs = $("fStatus").value, fz = $("fZone").value;
   const rows = items.filter(i=>(!q||i.id.toLowerCase().includes(q)||i.name.toLowerCase().includes(q))&&(!fs||stat(i)===fs)&&(!fz||i.zone===fz));
-  $("eqBody").innerHTML = rows.map(i=>`<tr><td><b>${i.id}</b></td><td>${i.name}</td><td>${badge(stat(i))}</td><td>${i.zone}</td><td>${i.lastScan?fmt(i.lastScan):"No scan yet"}</td><td>${whoOf(i)}</td><td>${fmt(i.issued)}</td><td>${i.status==="inuse"?"—":fmt(i.returned)}</td><td>${marksHTML(i)||"—"}</td><td>${actionsHTML(i)}</td></tr>`).join("");
+  $("eqBody").innerHTML = rows.map(i=>`<tr><td><b>${i.id}</b></td><td>${i.name}</td><td>${badge(stat(i))}</td><td>${locBtn(i)}</td><td>${i.lastScan?fmt(i.lastScan):"No scan yet"}</td><td>${whoOf(i)}</td><td>${fmt(i.issued)}</td><td>${i.status==="inuse"?"—":fmt(i.returned)}</td><td>${marksHTML(i)||"—"}</td><td>${actionsHTML(i)}</td></tr>`).join("");
   $("eqEmpty").hidden = rows.length>0;
 }
 function renderHistory(){
@@ -422,12 +426,12 @@ function renderHistory(){
 }
 function renderNotes(){
   const l=[...notes].sort((a,b)=>b.t-a.t);
-  $("noteList").innerHTML = l.map(n=>`<li class="new"><b>${n.name}</b> is available again<small>Returned ${fmt(n.t)} · ${n.zone}</small></li>`).join("");
+  $("noteList").innerHTML = l.map(n=>`<li class="new"><b>${n.name}</b> is available again<small>Returned ${fmt(n.t)} · <button class="loc" data-loc="${n.eq}">📍 ${n.zone}</button></small></li>`).join("");
   $("noteEmpty").hidden=l.length>0; $("noteClear").hidden=!l.length; $("nb").textContent=l.length||"";
 }
 function renderMarks(){
   const el=$("markList"); if(!el) return;
-  el.innerHTML = live().sort((a,b)=>a.at-b.at).map(m=>{ const it=items.find(i=>i.id===m.eq); return it?`<li><b>${it.name}</b> marked by ${m.name}<small>Marked at ${tm(m.at)} · <span class="cd" data-exp="${m.at+MARK_MS}">${mm(m.at+MARK_MS-nowS())}</span> left</small></li>`:""; }).join("") || `<li style="color:var(--mute)">No active marks.</li>`;
+  el.innerHTML = live().sort((a,b)=>a.at-b.at).map(m=>{ const it=items.find(i=>i.id===m.eq); return it?`<li><b>${it.name}</b> marked by ${m.name}<small>${locBtn(it)} · Marked at ${tm(m.at)} · <span class="cd" data-exp="${m.at+MARK_MS}">${mm(m.at+MARK_MS-nowS())}</span> left</small></li>`:""; }).join("") || `<li style="color:var(--mute)">No active marks.</li>`;
 }
 function renderMine(){
   const el=$("mine"); if(!el) return;
@@ -597,10 +601,48 @@ mapin.addEventListener("focusin",e=>{
   }
 });
 document.addEventListener("keydown",e=>{ if(e.key==="Escape"&&selId) closeCard(); });
-function toggleType(e){ const r=e.target.closest("tr"); if(!r) return; hiType=hiType===r.dataset.type?null:r.dataset.type; renderTypes(); renderMap(); }
+function toggleType(e){ if(e.target.closest(".loc")) return; const r=e.target.closest("tr"); if(!r) return; hiType=hiType===r.dataset.type?null:r.dataset.type; renderTypes(); renderMap(); }
 $("types").addEventListener("click",toggleType);
 $("types").addEventListener("keydown",e=>{ if(e.key==="Enter"||e.key===" "){ e.preventDefault(); toggleType(e); } });
 
+// tap a location -> jump to the map, open that floor and highlight the equipment
+function markerXY(it){
+  const R=ROOM[it.zone], l=items.filter(x=>x.zone===it.zone), {s,cols}=packing(it.zone,l.length), k=l.indexOf(it);
+  return {x:R.x+27+(k%cols)*s, y:R.y+66+Math.floor(k/cols)*s};
+}
+function focusZoom(px,py,z1,dur){   // smooth fly-in: centre on (px,py) and zoom to z1
+  const id=++tw, z0=view.z, x0=view.x+BW/z0/2, y0=view.y+BH/z0/2, t0=performance.now(); tz=z1;
+  (function f(t){
+    if(id!==tw) return;
+    const k=Math.min(1,(t-t0)/dur), e=k<.5?4*k*k*k:1-Math.pow(-2*k+2,3)/2;
+    const z=z0+(z1-z0)*e, cx=x0+(px-x0)*e, cy=y0+(py-y0)*e;
+    view.z=z; view.x=cx-BW/z/2; view.y=cy-BH/z/2; apply();
+    if(k<1) requestAnimationFrame(f);
+  })(t0);
+}
+function findOnMap(list){
+  if(!list.length) return;
+  const calm=matchMedia("(prefers-reduced-motion:reduce)").matches;
+  show("dash");
+  $("mapin").scrollIntoView({behavior:calm?"auto":"smooth",block:"center"});
+  setTimeout(()=>{
+    setFloor(ROOM[list[0].zone].f);
+    setTimeout(()=>{
+      findIds.clear(); list.forEach(i=>findIds.add(i.id)); renderMap();
+      const P=list.map(markerXY), xs=P.map(p=>p.x), ys=P.map(p=>p.y);
+      const cx=(Math.min(...xs)+Math.max(...xs))/2, cy=(Math.min(...ys)+Math.max(...ys))/2;
+      const sx=Math.max(...xs)-Math.min(...xs)+150, sy=Math.max(...ys)-Math.min(...ys)+150;
+      const z1=Math.max(2,Math.min(3.4,BW/sx,BH/sy)), dur=calm?1:1300;
+      focusZoom(cx,cy,z1,dur);
+      setTimeout(()=>{ if(findIds.has(list[0].id)) openCard(list[0].id); },dur+80);
+      setTimeout(()=>{ findIds.clear(); renderMap(); },dur+6000);
+    },calm?0:450);
+  },calm?0:350);
+}
+document.addEventListener("click",e=>{
+  const b=e.target.closest("[data-loc],[data-zone]"); if(!b) return;
+  findOnMap(b.dataset.loc?items.filter(i=>i.id===b.dataset.loc):items.filter(i=>i.type===b.dataset.type&&i.zone===b.dataset.zone));
+});
 // theme (storage may be empty or blocked)
 function setTheme(t){ document.documentElement.dataset.theme=t; $("theme").textContent = t==="dark"?"Light mode":"Dark mode"; try{localStorage.setItem("het-theme",t);}catch(e){} }
 let saved=null; try{saved=localStorage.getItem("het-theme");}catch(e){}
