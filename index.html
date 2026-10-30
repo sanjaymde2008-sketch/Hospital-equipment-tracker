@@ -132,8 +132,6 @@ td select,td input[type=text]{padding:6px 8px;border:1px solid var(--line);borde
 .how{font-size:13px;color:var(--mute);background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:10px 12px;margin:0 0 12px}
 #splash{position:fixed;inset:0;z-index:100;display:flex;align-items:center;justify-content:center;overflow:hidden;background:radial-gradient(120% 90% at 50% 0%,#0e4a45 0%,#082a28 45%,#04161a 100%);color:#fff;transition:opacity .7s,visibility .7s}
 #splash.hide{opacity:0;visibility:hidden}
-#splash{animation:spHide .7s 3.6s forwards}
-@keyframes spHide{to{opacity:0;visibility:hidden;pointer-events:none}}
 #splash .sp-grid{position:absolute;inset:0;background-image:linear-gradient(rgba(94,234,212,.07) 1px,transparent 1px),linear-gradient(90deg,rgba(94,234,212,.07) 1px,transparent 1px);background-size:44px 44px;-webkit-mask-image:radial-gradient(circle at 50% 50%,#000 20%,transparent 70%);mask-image:radial-gradient(circle at 50% 50%,#000 20%,transparent 70%)}
 #splash .sp-glow{position:absolute;width:520px;height:520px;max-width:120vw;border-radius:50%;background:radial-gradient(circle,rgba(45,212,191,.28),transparent 65%);animation:spGlow 3s ease-in-out infinite}
 #splash .sp-box{position:relative;display:flex;flex-direction:column;align-items:center;text-align:center;padding:24px}
@@ -195,7 +193,7 @@ td select,td input[type=text]{padding:6px 8px;border:1px solid var(--line);borde
         <h2>Hospital map</h2>
         <div class="floors" id="floors" role="tablist" aria-label="Floors"></div>
         <div class="mapbox"><div class="mapin" id="mapin">
-          <svg viewBox="0 0 720 250" role="img" aria-label="Hospital floor map showing where each equipment was last detected"><defs><pattern id="g1" width="10" height="10" patternUnits="userSpaceOnUse"><path d="M10 0H0V10" fill="none" stroke="#a9d6ff" stroke-opacity=".1" stroke-width=".5"/></pattern><pattern id="g2" width="50" height="50" patternUnits="userSpaceOnUse"><path d="M50 0H0V50" fill="none" stroke="#a9d6ff" stroke-opacity=".22" stroke-width=".8"/></pattern></defs>
+          <svg viewBox="0 0 720 456" role="img" aria-label="Hospital floor map showing where each equipment was last detected"><defs><pattern id="g1" width="10" height="10" patternUnits="userSpaceOnUse"><path d="M10 0H0V10" fill="none" stroke="#a9d6ff" stroke-opacity=".1" stroke-width=".5"/></pattern><pattern id="g2" width="50" height="50" patternUnits="userSpaceOnUse"><path d="M50 0H0V50" fill="none" stroke="#a9d6ff" stroke-opacity=".22" stroke-width=".8"/></pattern></defs>
           <rect width="720" height="456" fill="url(#g1)"/><rect width="720" height="456" fill="url(#g2)"/>
           <rect x="6" y="6" width="708" height="444" fill="none" stroke="#cfeaff" stroke-width="1"/>
           <g id="zr" class="plan"></g><g id="mk"></g></svg>
@@ -267,7 +265,7 @@ td select,td input[type=text]{padding:6px 8px;border:1px solid var(--line);borde
       <div class="wrap"><table><thead><tr><th>Equipment</th><th>Zone</th><th>Tag UID</th><th></th></tr></thead><tbody id="eqTags"></tbody></table></div></div>
   </section>
 </main>
-<footer>Location is the last RFID checkpoint scan. All data is shared live between staff<span id="sync"></span>. <button class="theme" id="reset" style="margin-left:8px">Reset to default (3 at CP-1, 2 at CP-3)</button></footer>
+<footer>Location is the last RFID checkpoint scan. All data is shared live between staff<span id="sync"></span>. <button class="theme" id="reset" style="margin-left:8px">Reset to default (3 in Ward A, 2 in Ward B)</button></footer>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
 <script>
@@ -276,40 +274,25 @@ const MARK_MS = 6e5;
 let WINDOW_S = 30; // read from the database (app_settings), see supabase_fix_all.sql
 let skew = 0; const nowS = () => new Date().getTime() + skew;
 const FLOORS = [
- {name:"First floor",col:"#4a6fa5",h:176.9,oy:36.5,img:"floor1.jpg"},
- {name:"Second floor",col:"#0f6b66",h:175.7,oy:37.2,img:"floor2.jpg"},
- {name:"Main gate (ground)",col:"#b4402f",h:104.9,oy:72.5,img:"gate.jpg"}
+ {name:"Ground floor",col:"#0f6b66",rooms:[["Emergency",20,210,"t","n"],["Radiology",240,150,"t","n"],["Laboratory",400,110,"t","n"],["Pharmacy",520,90,"t","n"],["Admin",620,80,"t","n"],["Main lobby",20,180,"b","n"],["General Ward A",210,250,"b","e"],["Lift",470,60,"b","c"],["OPD",540,160,"b","n"]]},
+ {name:"First floor",col:"#4a6fa5",rooms:[["ICU",20,220,"t","n"],["OT",250,170,"t","n"],["Recovery",430,130,"t","n"],["Nurse station",570,130,"t","n"],["General Ward B",20,200,"b","e"],["Pediatrics",230,200,"b","n"],["Lift",440,60,"b","c"],["Dialysis",510,190,"b","n"]]}
 ];
-let BW = 720, BH = 250;
-const ROOM = {
-  "CP-1 Left Wing":{f:0,multi:true,w:160,h:93,at:{0:{x:51.7,y:59.0},1:{x:51.7,y:60.2}}},
-  "CP-2 Central Corridor":{f:0,multi:true,w:160,h:93,at:{0:{x:222.6,y:59.0},1:{x:222.6,y:60.2}}},
-  "CP-3 Right Wing":{f:0,multi:true,w:160,h:93,at:{0:{x:513.0,y:59.0},1:{x:513.0,y:60.2}}},
-  "CP-4 Main Gate":{f:2,w:160,h:93,at:{2:{x:472.1,y:58.4}}}
-};
+const ROOM = {};
+FLOORS.forEach((F,f)=>F.rooms.forEach(([n,x,w,row,k])=>{ if(k==="e") ROOM[n]={x,w,y:row==="t"?20:220,h:row==="t"?160:200,f}; }));
 const ZONES = Object.keys(ROOM);
-const CPN = {"CP-1 Left Wing":"RFID checkpoint 1","CP-2 Central Corridor":"RFID checkpoint 2","CP-3 Right Wing":"RFID checkpoint 3","CP-4 Main Gate":"RFID checkpoint 4"};
-// older reader names -> checkpoints of the new blueprint (edit here if your readers use other names)
-const ZONE_ALIAS = {"general ward a":"CP-1 Left Wing","general ward b":"CP-3 Right Wing"};
-function nz(n){ if(!n) return n; if(ROOM[n]) return n; const k=String(n).trim().toLowerCase(); if(ZONE_ALIAS[k]) return ZONE_ALIAS[k];
-  const m=k.match(/cp[\s_-]*([1-4])/); if(m) return ZONES.find(z=>z.startsWith("CP-"+m[1]))||n;
-  if(/main\s*(gate|entrance)|exit/.test(k)) return "CP-4 Main Gate"; return n; }
-const onFloor = (z,f) => ROOM[z].multi ? !!ROOM[z].at[f] : ROOM[z].f===f;
-const fl = z => ROOM[z].multi ? (ROOM[z].at[curFloor]?curFloor:ROOM[z].f) : ROOM[z].f;
-const pt = z => ROOM[z].at[fl(z)];
-const floorLabel = z => ROOM[z].multi ? "First & Second floor" : FLOORS[ROOM[z].f].name;
+const CPN = {"General Ward A":"RFID checkpoint 1","General Ward B":"RFID checkpoint 2"};
 let STAFF = [];
 const ZCOL = {}; ZONES.forEach(z=>ZCOL[z]=FLOORS[ROOM[z].f].col);
 // ===== DEFAULT WARD OF EACH EQUIPMENT (change ward names here) =====
 const DEFAULT_WARD = {
-  XR01:"CP-1 Left Wing",  // X-ray machine
-  M01:"CP-1 Left Wing",   // Portable monitor
-  PO01:"CP-1 Left Wing",  // Pulse oximeter
-  BP01:"CP-3 Right Wing",  // BP machine
-  GL01:"CP-3 Right Wing"   // Glucometer
+  XR01:"General Ward A",  // X-ray machine
+  M01:"General Ward A",   // Portable monitor
+  PO01:"General Ward A",  // Pulse oximeter
+  BP01:"General Ward B",  // BP machine
+  GL01:"General Ward B"   // Glucometer
 };
 const items = [["XR01","🩻","X-ray machine"],["M01","🖥️","Portable monitor"],["PO01","💓","Pulse oximeter"],["BP01","🩺","BP machine"],["GL01","🩸","Glucometer"]]
- .map(([id,emoji,nm])=>{ const zone=DEFAULT_WARD[id]||"CP-1 Left Wing"; return {id,emoji,name:emoji+" "+nm,zone,home:zone,status:"available",staff:"—",staffId:"",issued:null,returned:null}; });
+ .map(([id,emoji,nm])=>{ const zone=DEFAULT_WARD[id]||"General Ward A"; return {id,emoji,name:emoji+" "+nm,zone,home:zone,status:"available",staff:"—",staffId:"",issued:null,returned:null}; });
 let activity=[], actWarned=false, scanlog=[]; const findIds=new Set();
 function locBtn(i){ return `<button class="loc" data-loc="${i.id}" title="Show on map">📍 ${i.zone}</button>`; }
 let history=[], marks=[], notify=[], notes=[], me=null, db=null;
@@ -328,26 +311,26 @@ const ymd = t => { const d=new Date(t); return d.getFullYear()+"-"+String(d.getM
 function renderTypes(){
   const fo=document.activeElement&&document.activeElement.closest&&document.activeElement.closest("tr.row"), ft=fo&&fo.dataset.type;
   $("types").innerHTML = TYPES.map(t=>{
-    const l=items.filter(i=>i.type===t), tot=l.length, a=l.filter(i=>stat(i)==="available").length, n=tot-a, loc=ZONES.map(z=>{ const c=l.filter(i=>i.zone===z).length, nm=z.split(" ")[0]; return c?`<button class="loc" data-zone="${z}" data-type="${t}" title="Show on map">📍 ${nm}: <b>${c}</b></button>`:"📍 "+nm+": <b>0</b>"; }).join(" · "), mk=l.reduce((c,i)=>c+marksOf(i.id).length,0), mn=l.flatMap(i=>marksOf(i.id).map(m=>hx(m.name))).join(", "), who=l.filter(i=>i.status==="inuse").map(i=>`<div>👤 <b>${hx(i.staffId?i.staff:"Unknown user")}</b><br><small style="margin:0">${hx(i.zone.replace("General ",""))} · since ${tm(i.issued)}</small></div>`).join("")||"—";
+    const l=items.filter(i=>i.type===t), tot=l.length, a=l.filter(i=>stat(i)==="available").length, n=tot-a, loc=ZONES.map(z=>{ const c=l.filter(i=>i.zone===z).length, nm=z.replace("General ",""); return c?`<button class="loc" data-zone="${z}" data-type="${t}" title="Show on map">📍 ${nm}: <b>${c}</b></button>`:"📍 "+nm+": <b>0</b>"; }).join(" · "), mk=l.reduce((c,i)=>c+marksOf(i.id).length,0), mn=l.flatMap(i=>marksOf(i.id).map(m=>hx(m.name))).join(", "), who=l.filter(i=>i.status==="inuse").map(i=>`<div>👤 <b>${hx(i.staffId?i.staff:"Unknown user")}</b><br><small style="margin:0">${hx(i.zone.replace("General ",""))} · since ${tm(i.issued)}</small></div>`).join("")||"—";
     return `<tr class="row${hiType===t?" on":""}" tabindex="0" data-type="${t}" title="Highlight on map"><td><b>${t}</b></td><td class="num">${tot}</td><td class="num n-ok">${a}</td><td><span class="num n-bad">${n}</span></td><td style="font-size:13px;white-space:normal;min-width:120px">${who}</td><td style="font-size:13px;white-space:normal;min-width:140px">${loc}<br><span class="cd">⏳ ${mk} marked now${mn?": "+mn:""}</span></td></tr>`;
   }).join("");
   if(ft){ const n=$("types").querySelector(`tr[data-type="${ft}"]`); if(n) n.focus({preventScroll:true}); }
 }
 function packing(z,n){
   const R=ROOM[z], cap=s=>(Math.floor((R.w-54)/s)+1)*(Math.floor((R.h-93)/s)+1);
-  let s=24; while(s>16&&cap(s)<n) s-=1;
+  let s=42; while(s>28&&cap(s)<n) s-=2;
   return {s,cols:Math.max(1,Math.floor((R.w-54)/s)+1)};
 }
 function renderFloors(){
   FLOORS.forEach((F,f)=>{
-    const n=items.filter(i=>onFloor(i.zone,f)&&(!hiType||i.type===hiType)).length, b=$("fb-"+f);
+    const n=items.filter(i=>ROOM[i.zone].f===f&&(!hiType||i.type===hiType)).length, b=$("fb-"+f);
     b.setAttribute("aria-selected",f===curFloor); b.tabIndex=f===curFloor?0:-1; $("fc-"+f).textContent=n;
   });
 }
 function renderMap(){
   const byZ={}; items.forEach(i=>(byZ[i.zone]=byZ[i.zone]||[]).push(i));
   ZONES.forEach(z=>{
-    const l=byZ[z]||[], R=pt(z), {s,cols}=packing(z,l.length), el=$("zc-"+z), on=fl(z)===curFloor;
+    const l=byZ[z]||[], R=ROOM[z], {s,cols}=packing(z,l.length), el=$("zc-"+z), on=R.f===curFloor;
     if(el) el.textContent=CPN[z]+" · "+l.length+(l.length===1?" item":" items");
     l.forEach((i,k)=>{
       const g=$("mk-"+i.id), was=!g.classList.contains("off"), x=R.x+27+(k%cols)*s, y=R.y+66+Math.floor(k/cols)*s, tr=`translate(${x}px,${y}px)`;
@@ -355,20 +338,20 @@ function renderMap(){
       if(on&&!was&&g.dataset.fl!==undefined){ g.style.transition="none"; g.style.transform=tr; g.getBoundingClientRect(); g.style.transition=""; }
       else if(!on&&was&&g.dataset.fl!==undefined) setTimeout(()=>{ if(g.classList.contains("off")) g.style.transform=g._tr; },300);
       else g.style.transform=tr;
-      g.dataset.fl=fl(z);
-      g.setAttribute("class",`mk ${stat(i)}${marksOf(i.id).length?" marked":""}${findIds.has(i.id)?" find":(findIds.size?" dim":"")}${on?"":" off"}${hiType&&i.type!==hiType?" dim":""}${i.id===selId?" sel":""}`);
+      g.dataset.fl=R.f;
+      g.setAttribute("class",`mk ${stat(i)}${marksOf(i.id).length?" marked":""}${findIds.has(i.id)?" find":""}${on?"":" off"}${hiType&&i.type!==hiType?" dim":""}${i.id===selId?" sel":""}`);
       g.setAttribute("tabindex",on?"0":"-1"); g.setAttribute("aria-hidden",on?"false":"true");
-      g.setAttribute("aria-label",`${i.name}, ${LABEL[stat(i)]}, ${z}, ${FLOORS[fl(z)].name}${marksOf(i.id).length?", marked by "+marksOf(i.id).map(m=>m.name).join(", "):""}`);
+      g.setAttribute("aria-label",`${i.name}, ${LABEL[stat(i)]}, ${z}, ${FLOORS[R.f].name}${marksOf(i.id).length?", marked by "+marksOf(i.id).map(m=>m.name).join(", "):""}`);
     });
   });
   renderFloors();
-  if(selId){ const it=items.find(x=>x.id===selId); if(fl(it.zone)!==curFloor) closeCard(); else { fillCard(); setTimeout(place,720); } }
+  if(selId){ const it=items.find(x=>x.id===selId); if(ROOM[it.zone].f!==curFloor) closeCard(); else { fillCard(); setTimeout(place,720); } }
 }
 function zoneHTML(){
   return ZONES.map(z=>{
     const list = items.filter(i=>i.zone===z);
     const chips = list.length ? list.map(i=>`<span class="chip ${stat(i)}" title="${i.name}">${i.id}</span>`).join("") : `<span style="color:var(--mute);font-size:13px">No equipment detected</span>`;
-    return `<div class="zone" style="border-top:3px solid ${ZCOL[z]}"><h3>${z}<span>${list.length}</span></h3><small style="color:var(--mute)">${floorLabel(z)}</small><div class="chips">${chips}</div></div>`;
+    return `<div class="zone" style="border-top:3px solid ${ZCOL[z]}"><h3>${z}<span>${list.length}</span></h3><small style="color:var(--mute)">${FLOORS[ROOM[z].f].name}</small><div class="chips">${chips}</div></div>`;
   }).join("");
 }
 const mm = ms => { const x=Math.max(0,Math.min(600,Math.ceil(ms/1000))); return Math.floor(x/60)+":"+String(x%60).padStart(2,"0"); };
@@ -477,15 +460,24 @@ items.forEach(i=>i.type=i.name.replace(/\s*\d+$/,""));
 const TYPES = [...new Set(items.map(i=>i.type))];
 let selId=null, hiType=null, curFloor=0;
 function drawPlan(){
-  const F=FLOORS[curFloor];
-  $("zr").innerHTML=`<rect x="0" y="0" width="${BW}" height="${BH}" fill="#0e3d6e"/><image href="${F.img}" x="0" y="${F.oy}" width="${BW}" height="${F.h}" preserveAspectRatio="none"/>`;
+  const F=FLOORS[curFloor], A=[];
+  F.rooms.forEach(([n,x,w,row,k])=>{
+    const top=row==="t", y=top?20:220, h=top?160:200, dy=top?180:220, u=top?1:-1, dx=x+Math.round((w-36)/2);
+    A.push(`<rect class="zr${k==="e"?" ez":""}" x="${x}" y="${y}" width="${w}" height="${h}"/><line class="gap" x1="${dx}" y1="${dy}" x2="${dx+36}" y2="${dy}"/><path class="door" d="M${dx} ${dy}V${dy+u*36}M${dx+36} ${dy}A36 36 0 0 ${top?1:0} ${dx} ${dy+u*36}"/>`);
+    if(k==="e") A.push(`<text class="zl" x="${x+14}" y="${y+26}">${n}</text><text class="zc" id="zc-${n}" x="${x+14}" y="${y+42}"></text>`);
+    else if(k==="c"){ const tr=Array.from({length:11},(_,j)=>`M${x+10} ${y+88+j*8}H${x+50}`).join("");
+      A.push(`<rect class="fx" x="${x+10}" y="${y+14}" width="40" height="40"/><path class="fx" d="M${x+10} ${y+14}L${x+50} ${y+54}M${x+50} ${y+14}L${x+10} ${y+54}"/><text class="bpt" x="${x+30}" y="${y+68}" text-anchor="middle">Lift</text><rect class="fx" x="${x+10}" y="${y+80}" width="40" height="96"/><path class="fx" d="${tr}"/><text class="bpt" x="${x+30}" y="${y+190}" text-anchor="middle">Stairs</text>`); }
+    else A.push(`<text class="zn" x="${x+w/2}" y="${y+h/2}" text-anchor="middle">${n}</text>`);
+  });
+  A.push(`<text class="bpt" x="26" y="203">Main corridor</text><path class="door" d="M20 434H700M20 429V439M700 429V439"/><text class="bpt" x="360" y="431" text-anchor="middle">Overall length</text><text class="bpt" x="700" y="446" text-anchor="end">${F.name} plan · not to scale</text>`);
+  $("zr").innerHTML=A.join("");
 }
 drawPlan();
 $("floors").innerHTML = FLOORS.map((F,f)=>`<button role="tab" id="fb-${f}" data-f="${f}" title="Equipment on this floor"><span>${F.name}</span><span class="cnt" id="fc-${f}"></span></button>`).join("");
 function setFloor(f){
   if(f===curFloor) return;
   curFloor=f;
-  if(selId&&!onFloor(items.find(x=>x.id===selId).zone,f)) closeCard();
+  if(selId&&ROOM[items.find(x=>x.id===selId).zone].f!==f) closeCard();
   drawPlan(); renderMap();
   tw++; view={x:0,y:0,z:1}; tz=1; apply();
   const pl=$("zr"); pl.classList.remove("fade"); pl.getBoundingClientRect(); pl.classList.add("fade");
@@ -495,13 +487,13 @@ $("floors").addEventListener("keydown",e=>{
   const d=e.key==="ArrowRight"?1:e.key==="ArrowLeft"?-1:0; if(!d) return;
   e.preventDefault(); const n=(curFloor+d+FLOORS.length)%FLOORS.length; setFloor(n); $("fb-"+n).focus();
 });
-$("mk").innerHTML = items.map(i=>`<g class="mk" id="mk-${i.id}" tabindex="0" role="button" data-id="${i.id}"><circle class="d" r="10"/><text style="font-size:12px">${i.emoji}</text></g>`).join("");
+$("mk").innerHTML = items.map(i=>`<g class="mk" id="mk-${i.id}" tabindex="0" role="button" data-id="${i.id}"><circle class="d" r="15"/><text style="font-size:17px">${i.emoji}</text></g>`).join("");
 const mapin=$("mapin"), tip=$("tip"), card=$("card");
 const pos = g => { const a=g.getBoundingClientRect(), b=mapin.getBoundingClientRect(); return {cx:a.left+a.width/2-b.left, cy:a.top+a.height/2-b.top, r:a.height/2}; };
 function showTip(g){ const i=items.find(x=>x.id===g.dataset.id), p=pos(g); tip.textContent=`${i.name} · ${LABEL[stat(i)]} · ${i.zone}`; tip.style.left=p.cx+"px"; tip.style.top=(p.cy-p.r-6)+"px"; tip.classList.add("on"); }
 function fillCard(){
   const i=items.find(x=>x.id===selId), s=stat(i);
-  const rows=[["RFID checkpoint",i.zone],["Last RFID scan",i.lastScan?fmt(i.lastScan):"No scan yet"],["Floor",floorLabel(i.zone)],["Taken by",whoOf(i)],["Taken",fmt(i.issued)],["Returned",i.status==="inuse"?"—":fmt(i.returned)]];
+  const rows=[["RFID checkpoint",i.zone],["Last RFID scan",i.lastScan?fmt(i.lastScan):"No scan yet"],["Floor",FLOORS[ROOM[i.zone].f].name],["Taken by",whoOf(i)],["Taken",fmt(i.issued)],["Returned",i.status==="inuse"?"—":fmt(i.returned)]];
   card.innerHTML=`<button class="x" aria-label="Close details">×</button><h3>${i.name}</h3><div style="margin-top:4px">${badge(s)} <span style="color:var(--mute);font-size:13px">${i.id}</span></div>`+rows.map((r,n)=>`<div class="r" style="--i:${n}"><span>${r[0]}</span><b>${r[1]}</b></div>`).join("")+marksHTML(i)+`<div style="margin-top:10px">${actionsHTML(i)}</div>`;
 }
 function place(){
@@ -534,7 +526,7 @@ mapin.addEventListener("keydown",e=>{
 addEventListener("resize",place);
 
 // ---------- ZOOM + PAN ----------
-const MAXZ=6, svg=mapin.querySelector("svg");
+const BW=720, BH=456, MAXZ=6, svg=mapin.querySelector("svg");
 let view={x:0,y:0,z:1}, suppress=false, tw=0, tz=1;
 function apply(){
   if(![view.x,view.y,view.z].every(Number.isFinite)) view={x:0,y:0,z:1};
@@ -614,38 +606,18 @@ $("types").addEventListener("click",toggleType);
 $("types").addEventListener("keydown",e=>{ if(e.key==="Enter"||e.key===" "){ e.preventDefault(); toggleType(e); } });
 
 // tap a location -> jump to the map, open that floor and highlight the equipment
-function markerXY(it){
-  const R=pt(it.zone), l=items.filter(x=>x.zone===it.zone), {s,cols}=packing(it.zone,l.length), k=l.indexOf(it);
-  return {x:R.x+27+(k%cols)*s, y:R.y+66+Math.floor(k/cols)*s};
-}
-function focusZoom(px,py,z1,dur){   // smooth fly-in: centre on (px,py) and zoom to z1
-  const id=++tw, z0=view.z, x0=view.x+BW/z0/2, y0=view.y+BH/z0/2, t0=performance.now(); tz=z1;
-  (function f(t){
-    if(id!==tw) return;
-    const k=Math.min(1,(t-t0)/dur), e=k<.5?4*k*k*k:1-Math.pow(-2*k+2,3)/2;
-    const z=z0+(z1-z0)*e, cx=x0+(px-x0)*e, cy=y0+(py-y0)*e;
-    view.z=z; view.x=cx-BW/z/2; view.y=cy-BH/z/2; apply();
-    if(k<1) requestAnimationFrame(f);
-  })(t0);
-}
 function findOnMap(list){
   if(!list.length) return;
-  const calm=matchMedia("(prefers-reduced-motion:reduce)").matches;
   show("dash");
-  $("mapin").scrollIntoView({behavior:calm?"auto":"smooth",block:"center"});
   setTimeout(()=>{
-    setFloor(fl(list[0].zone));
+    setFloor(ROOM[list[0].zone].f);
     setTimeout(()=>{
       findIds.clear(); list.forEach(i=>findIds.add(i.id)); renderMap();
-      const P=list.map(markerXY), xs=P.map(p=>p.x), ys=P.map(p=>p.y);
-      const cx=(Math.min(...xs)+Math.max(...xs))/2, cy=(Math.min(...ys)+Math.max(...ys))/2;
-      const sx=Math.max(...xs)-Math.min(...xs)+70, sy=Math.max(...ys)-Math.min(...ys)+70;
-      const z1=Math.max(3,Math.min(5,BW/sx,BH/sy)), dur=calm?1:1300;
-      focusZoom(cx,cy,z1,dur);
-      setTimeout(()=>{ if(findIds.has(list[0].id)) openCard(list[0].id); },dur+80);
-      setTimeout(()=>{ findIds.clear(); renderMap(); },dur+6000);
-    },calm?0:450);
-  },calm?0:350);
+      openCard(list[0].id);
+      $("mapin").scrollIntoView({behavior:"smooth",block:"center"});
+      setTimeout(()=>{ findIds.clear(); renderMap(); },5000);
+    },100);
+  },60);
 }
 document.addEventListener("click",e=>{
   const b=e.target.closest("[data-loc],[data-zone]"); if(!b) return;
@@ -688,19 +660,19 @@ async function refresh(){
     rs.slice(0,9).forEach(fail); const alErr=rs[9].error, slErr=rs[10].error;
     const aset=(rs[11].data||[]).find(x=>x.key==="staff_window_seconds"); if(aset&&+aset.value>0&&+aset.value!==WINDOW_S){ WINDOW_S=+aset.value; if($("winTxt")) $("winTxt").textContent=WINDOW_S+" seconds"; }
     const [eq,tx,ev,mk,nr,nt,st,ut,ss,al,sl]=rs.map(r=>r.data||[]);
-    eq.forEach(r=>{ const it=byCode(r.equipment_code); if(!it) return; it.dbId=r.id; it.tag=r.rfid_tag_id||""; it.status=r.status==="inuse"?"inuse":"available"; { const zz=nz(r.last_checkpoint); it.zone=ROOM[zz]?zz:it.home; } });
+    eq.forEach(r=>{ const it=byCode(r.equipment_code); if(!it) return; it.dbId=r.id; it.tag=r.rfid_tag_id||""; it.status=r.status==="inuse"?"inuse":"available"; it.zone=ROOM[r.last_checkpoint]?r.last_checkpoint:it.home; });
     history=tx.map(t=>{ const it=byDb(t.equipment_id); if(!it) return null; const tm=msOf(t.transaction_time), e=ev.find(x=>x.equipment_id===t.equipment_id&&Math.abs(msOf(x.detected_at)-tm)<2000);
-      return {id:t.id,src:t.source,t:tm,eq:it.id,name:it.name,staff:t.staff_id?sname(t.staff_id):"Unknown",staffId:t.staff_id||"",zone:e?nz(e.checkpoint_name):it.zone,action:t.action}; }).filter(Boolean);
+      return {id:t.id,src:t.source,t:tm,eq:it.id,name:it.name,staff:t.staff_id?sname(t.staff_id):"Unknown",staffId:t.staff_id||"",zone:e?e.checkpoint_name:it.zone,action:t.action}; }).filter(Boolean);
     items.forEach(it=>{ const lt=history.find(h=>h.eq===it.id&&h.action==="Taken"), lr=history.find(h=>h.eq===it.id&&h.action==="Returned");
       it.staff=lt?lt.staff:"—"; it.staffId=lt&&lt.staffId?lt.staffId:""; it.issued=lt?lt.t:null; it.returned=it.status==="inuse"?null:(lr?lr.t:null); });
     items.forEach(it=>{ const le=ev.find(x=>x.equipment_id===it.dbId); it.lastScan=le?msOf(le.detected_at):null; });
     scanlog=slErr?null:sl.map(x=>({id:x.id,t:msOf(x.created_at),cp:x.checkpoint_name,tag:x.tag,result:x.result}));
     if(alErr){ if(!actWarned){ actWarned=true; toast("Activity log table missing. Run supabase_activity_log.sql in Supabase.","bad"); }
       activity=history.map(h=>({id:"t"+h.id,t:h.t,event:h.action==="Taken"?"taken":"returned",eq:h.eq,name:h.name,staff:h.staff,zone:h.zone,detail:""})); }
-    else activity=al.map(a=>({id:a.id,t:msOf(a.created_at),event:a.event,eq:a.equipment_code||"",name:a.equipment_name||"",staff:a.staff_name||"",zone:nz(a.checkpoint_name||""),detail:a.detail||""}));
+    else activity=al.map(a=>({id:a.id,t:msOf(a.created_at),event:a.event,eq:a.equipment_code||"",name:a.equipment_name||"",staff:a.staff_name||"",zone:a.checkpoint_name||"",detail:a.detail||""}));
     // scans that came from the RFID hardware (not from a Take/Return button) -> live toast
     const hw=ev.filter(e=>!tx.some(t=>t.equipment_id===e.equipment_id&&Math.abs(msOf(t.transaction_time)-msOf(e.detected_at))<2000));
-    if(scansReady) hw.filter(e=>!seenScans.has(e.id)).forEach(e=>{ const it=byDb(e.equipment_id); if(it) toast("📡 RFID: "+it.name+" detected at "+nz(e.checkpoint_name)); });
+    if(scansReady) hw.filter(e=>!seenScans.has(e.id)).forEach(e=>{ const it=byDb(e.equipment_id); if(it) toast("📡 RFID: "+it.name+" detected at "+e.checkpoint_name); });
     hw.forEach(e=>seenScans.add(e.id)); scansReady=true;
     st.forEach(r=>{ const p=staffMap[r.id]; if(p) p.tag=r.rfid_tag_id||""; });
     const known=new Set([...STAFF.map(p=>p.tag),...items.map(i=>i.tag)].filter(Boolean).map(x=>x.toUpperCase()));
@@ -708,12 +680,12 @@ async function refresh(){
     // equipment taken/returned by the RFID reader -> live toast
     history.filter(h=>h.src==="rfid"&&!seenTx.has(h.id)).forEach(h=>{ if(txReady&&me&&h.staffId&&String(h.staffId)===String(me.id)) toast(h.action==="Taken"?"✅ You took "+h.name+" at "+h.zone:"↩️ You returned "+h.name+" at "+h.zone+" · now free","note"); seenTx.add(h.id); }); txReady=true;
     // staff ID card tapped -> 10 s window toast
-    ss.filter(x=>!seenSS.has(x.id)).forEach(x=>{ if(ssReady&&me&&String(x.staff_id)===String(me.id)) toast("🪪 Your ID tapped at "+nz(x.checkpoint_name)+" · scan equipment within "+WINDOW_S+" s"); seenSS.add(x.id); }); ssReady=true;
+    ss.filter(x=>!seenSS.has(x.id)).forEach(x=>{ if(ssReady&&me&&String(x.staff_id)===String(me.id)) toast("🪪 Your ID tapped at "+x.checkpoint_name+" · scan equipment within "+WINDOW_S+" s"); seenSS.add(x.id); }); ssReady=true;
     // unregistered tag scanned -> tell everyone once so it is not silently ignored
     unk.forEach(u=>{ const k=u.uid+"|"+u.t; if(utReady&&!seenUT.has(k)) toast("⚠️ Unregistered tag "+u.uid+" at "+u.cp+" · assign it in the RFID tags tab","bad"); seenUT.add(k); }); utReady=true;
     marks=mk.map(m=>({id:m.id,eq:(byDb(m.equipment_id)||{}).id,staff:m.staff_id,name:sname(m.staff_id),at:msOf(m.marked_at)})).filter(m=>m.eq);
     notify=nr.map(n=>({id:n.id,eq:(byDb(n.equipment_id)||{}).id,staff:n.staff_id})).filter(n=>n.eq);
-    notes=nt.map(n=>({id:n.id,to:n.staff_id,eq:(byDb(n.equipment_id)||{}).id,name:(byDb(n.equipment_id)||{}).name||"Equipment",t:msOf(n.returned_at),zone:nz(n.checkpoint_name)}));
+    notes=nt.map(n=>({id:n.id,to:n.staff_id,eq:(byDb(n.equipment_id)||{}).id,name:(byDb(n.equipment_id)||{}).name||"Equipment",t:msOf(n.returned_at),zone:n.checkpoint_name}));
     if(notesReady) notes.filter(n=>!seenNotes.has(n.id)).forEach(n=>toast(`🔔 ${n.name} is available again. Returned on ${fmt(n.t)} at ${n.zone}`,"note"));
     notes.forEach(n=>seenNotes.add(n.id)); if(me) notesReady=true;
     banner(""); $("sync").textContent=" · live, last update "+tm(nowS()); renderAll();
@@ -779,7 +751,7 @@ $("reset").onclick=async()=>{
     await sb.from("activity_log").delete().gte("created_at","1970-01-01");
     for(const i of items) fail(await sb.from("equipment").update({status:"available",last_checkpoint:i.home,last_detected_at:null}).eq("id",i.dbId));
     try{ await sb.from("activity_log").insert({event:"reset",staff_id:me?me.id:null,staff_name:me?me.name:null,detail:"All data reset"}); }catch(x){}
-    refresh(); toast("Reset done: 3 equipment at CP-1, 2 at CP-3");
+    refresh(); toast("Reset done: 3 equipment in Ward A, 2 in Ward B");
   }catch(e){ toast("Reset failed: "+e.message,"bad"); }
 };
 // ---------- RFID TAGS TAB ----------
