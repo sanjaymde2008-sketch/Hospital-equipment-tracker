@@ -155,6 +155,18 @@ td select,td input[type=text]{padding:6px 8px;border:1px solid var(--line);borde
 @keyframes fnd{50%{transform:scale(1.5)}}
 @media(prefers-reduced-motion:reduce){#splash *{animation:none!important}#splash .sp-ecg{stroke-dashoffset:0}}
 @media(prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+.spdim{animation:spIn .5s both}
+@keyframes spIn{from{opacity:0}}
+.sproom{fill:none;stroke:#f5b301;stroke-width:3;stroke-dasharray:14 8;animation:march 1.2s linear infinite,spIn .5s both;filter:drop-shadow(0 0 6px #f5b301)}
+@keyframes march{to{stroke-dashoffset:-44}}
+.rad{fill:none;stroke:#f5b301;stroke-width:2.5;transform-box:fill-box;transform-origin:center;animation:radar 1.8s ease-out infinite}
+.rad:nth-of-type(2){animation-delay:.6s}.rad:nth-of-type(3){animation-delay:1.2s}
+@keyframes radar{from{transform:scale(.6);opacity:.95}to{transform:scale(3.6);opacity:0}}
+.pinb{transform-box:fill-box;animation:pinb .9s ease-in-out infinite}
+@keyframes pinb{50%{transform:translateY(-7px)}}
+.pin path{fill:#f5b301;stroke:#3a2a00;stroke-width:1.5}.pin circle{fill:#3a2a00}
+.fchip{position:absolute;z-index:4;left:10px;top:10px;max-width:calc(100% - 70px);background:#f5b301;color:#2b1d00;font-weight:600;font-size:13px;border:0;border-radius:999px;padding:7px 14px;text-align:left;box-shadow:0 6px 18px rgba(0,0,0,.3);animation:chipIn .5s cubic-bezier(.2,.9,.3,1.2) both}
+@keyframes chipIn{from{transform:translateY(-14px) scale(.8);opacity:0}}
 </style>
 </head>
 <body>
@@ -196,8 +208,9 @@ td select,td input[type=text]{padding:6px 8px;border:1px solid var(--line);borde
           <svg viewBox="0 0 720 456" role="img" aria-label="Hospital floor map showing where each equipment was last detected"><defs><pattern id="g1" width="10" height="10" patternUnits="userSpaceOnUse"><path d="M10 0H0V10" fill="none" stroke="#a9d6ff" stroke-opacity=".1" stroke-width=".5"/></pattern><pattern id="g2" width="50" height="50" patternUnits="userSpaceOnUse"><path d="M50 0H0V50" fill="none" stroke="#a9d6ff" stroke-opacity=".22" stroke-width=".8"/></pattern></defs>
           <rect width="720" height="456" fill="url(#g1)"/><rect width="720" height="456" fill="url(#g2)"/>
           <rect x="6" y="6" width="708" height="444" fill="none" stroke="#cfeaff" stroke-width="1"/>
-          <g id="zr" class="plan"></g><g id="mk"></g></svg>
-          <div class="zoom"><button id="zin" aria-label="Zoom in">+</button><button id="zout" aria-label="Zoom out">−</button><button id="zfit" aria-label="Reset map view" style="font-size:14px">Fit</button></div>
+          <g id="zr" class="plan"></g><g id="spot" style="pointer-events:none"></g><g id="mk"></g></svg>
+          <button class="fchip" id="fchip" hidden title="Tap to clear"></button>
+        <div class="zoom"><button id="zin" aria-label="Zoom in">+</button><button id="zout" aria-label="Zoom out">−</button><button id="zfit" aria-label="Reset map view" style="font-size:14px">Fit</button></div>
           <div class="tip" id="tip"></div>
           <div class="card" id="card" role="dialog" aria-live="polite"></div>
         </div></div>
@@ -339,7 +352,7 @@ function renderMap(){
       else if(!on&&was&&g.dataset.fl!==undefined) setTimeout(()=>{ if(g.classList.contains("off")) g.style.transform=g._tr; },300);
       else g.style.transform=tr;
       g.dataset.fl=R.f;
-      g.setAttribute("class",`mk ${stat(i)}${marksOf(i.id).length?" marked":""}${findIds.has(i.id)?" find":""}${on?"":" off"}${hiType&&i.type!==hiType?" dim":""}${i.id===selId?" sel":""}`);
+      g.setAttribute("class",`mk ${stat(i)}${marksOf(i.id).length?" marked":""}${findIds.has(i.id)?" find":(findIds.size?" dim":"")}${on?"":" off"}${hiType&&i.type!==hiType?" dim":""}${i.id===selId?" sel":""}`);
       g.setAttribute("tabindex",on?"0":"-1"); g.setAttribute("aria-hidden",on?"false":"true");
       g.setAttribute("aria-label",`${i.name}, ${LABEL[stat(i)]}, ${z}, ${FLOORS[R.f].name}${marksOf(i.id).length?", marked by "+marksOf(i.id).map(m=>m.name).join(", "):""}`);
     });
@@ -476,6 +489,7 @@ drawPlan();
 $("floors").innerHTML = FLOORS.map((F,f)=>`<button role="tab" id="fb-${f}" data-f="${f}" title="Equipment on this floor"><span>${F.name}</span><span class="cnt" id="fc-${f}"></span></button>`).join("");
 function setFloor(f){
   if(f===curFloor) return;
+  if(findIds.size||$("spot").innerHTML) clearFind();
   curFloor=f;
   if(selId&&ROOM[items.find(x=>x.id===selId).zone].f!==f) closeCard();
   drawPlan(); renderMap();
@@ -606,19 +620,53 @@ $("types").addEventListener("click",toggleType);
 $("types").addEventListener("keydown",e=>{ if(e.key==="Enter"||e.key===" "){ e.preventDefault(); toggleType(e); } });
 
 // tap a location -> jump to the map, open that floor and highlight the equipment
+function markerXY(it){
+  const R=ROOM[it.zone], l=items.filter(x=>x.zone===it.zone), {s,cols}=packing(it.zone,l.length), k=l.indexOf(it);
+  return {x:R.x+27+(k%cols)*s, y:R.y+66+Math.floor(k/cols)*s};
+}
+function focusZoom(px,py,z1,dur,done){   // flyTo: pan + zoom, with a small zoom-out arc so the move is easy to follow
+  const id=++tw, z0=view.z, x0=view.x+BW/z0/2, y0=view.y+BH/z0/2, t0=performance.now(); tz=z1;
+  const dip=Math.min(.7,Math.hypot(px-x0,py-y0)/BW*1.4);
+  (function f(t){
+    if(id!==tw) return;
+    const k=Math.min(1,(t-t0)/dur), e=k<.5?4*k*k*k:1-Math.pow(-2*k+2,3)/2;
+    const z=Math.max(1,z0+(z1-z0)*e-dip*Math.sin(Math.PI*k)), cx=x0+(px-x0)*e, cy=y0+(py-y0)*e;
+    view.z=z; view.x=cx-BW/z/2; view.y=cy-BH/z/2; apply();
+    if(k<1) requestAnimationFrame(f); else if(done) done();
+  })(t0);
+}
+let findTimer=0;
+function clearFind(){ clearTimeout(findTimer); findIds.clear(); $("spot").innerHTML=""; $("fchip").hidden=true; renderMap(); }
+function whenSettled(cb,max){   // wait until the page's smooth scroll has finished
+  const el=$("mapin"), t0=performance.now(); let last=-1, n=0;
+  (function f(){ const y=el.getBoundingClientRect().top; n=Math.abs(y-last)<.5?n+1:0; last=y;
+    if(n>=4||performance.now()-t0>max) cb(); else requestAnimationFrame(f); })();
+}
+function spotlight(list,R){   // dim everything except the room, outline the room, ping + pin the equipment
+  const rx=R.x-4, ry=R.y-4, rw=R.w+8, rh=R.h+8;
+  const dim=`<mask id="spm"><rect width="720" height="456" fill="#fff"/><rect x="${rx}" y="${ry}" width="${rw}" height="${rh}" rx="14" fill="#000"/></mask><rect class="spdim" width="720" height="456" fill="#020e1c" opacity=".66" mask="url(#spm)"/><rect class="sproom" x="${rx}" y="${ry}" width="${rw}" height="${rh}" rx="14"/>`;
+  const fx=list.map(markerXY).map(p=>`<g transform="translate(${p.x} ${p.y})"><g><circle class="rad" r="15"/><circle class="rad" r="15"/><circle class="rad" r="15"/></g><g class="pin" transform="translate(0 -24)"><g class="pinb"><path d="M0 0C-7-9-11-14-11-19A11 11 0 0 1 11-19C11-14 7-9 0 0Z"/><circle cy="-19" r="4"/></g></g></g>`).join("");
+  $("spot").innerHTML=dim+fx;
+}
 function findOnMap(list){
   if(!list.length) return;
-  show("dash");
-  setTimeout(()=>{
-    setFloor(ROOM[list[0].zone].f);
+  const calm=matchMedia("(prefers-reduced-motion:reduce)").matches, z0=list[0].zone, R=ROOM[z0], same=R.f===curFloor;
+  clearFind(); closeCard(); show("dash");
+  $("mapin").scrollIntoView({behavior:calm?"auto":"smooth",block:"center"});
+  whenSettled(()=>{
+    if(!same) setFloor(R.f);
     setTimeout(()=>{
-      findIds.clear(); list.forEach(i=>findIds.add(i.id)); renderMap();
-      openCard(list[0].id);
-      $("mapin").scrollIntoView({behavior:"smooth",block:"center"});
-      setTimeout(()=>{ findIds.clear(); renderMap(); },5000);
-    },100);
-  },60);
+      findIds.clear(); list.forEach(i=>findIds.add(i.id)); renderMap(); spotlight(list,R);
+      const ch=$("fchip"); ch.textContent=`📍 ${list.length===1?list[0].name:list.length+" × "+list[0].type} · ${z0} · ${FLOORS[R.f].name}`;
+      ch.hidden=false; ch.style.animation="none"; ch.getBoundingClientRect(); ch.style.animation="";
+      const z1=Math.max(1.9,Math.min(3.2,BW/(R.w+80),BH/(R.h+40))), dur=calm?1:1500;
+      focusZoom(R.x+R.w/2,R.y+R.h/2,z1,dur,()=>{ if(findIds.has(list[0].id)) openCard(list[0].id); });
+      findTimer=setTimeout(clearFind,dur+8000);
+    },same||calm?0:450);
+  },calm?0:1100);
 }
+$("fchip").addEventListener("click",clearFind);
+svg.addEventListener("pointerdown",()=>{ if(findIds.size) clearFind(); });
 document.addEventListener("click",e=>{
   const b=e.target.closest("[data-loc],[data-zone]"); if(!b) return;
   findOnMap(b.dataset.loc?items.filter(i=>i.id===b.dataset.loc):items.filter(i=>i.type===b.dataset.type&&i.zone===b.dataset.zone));
